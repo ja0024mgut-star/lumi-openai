@@ -1,5 +1,5 @@
 import streamlit as st
-import anthropic
+from openai import OpenAI
 import os
 from datetime import datetime
 from collections import Counter
@@ -17,15 +17,14 @@ load_dotenv()
 def llamar_api_con_retry(client, system_prompt, messages, max_intentos=3):
     for intento in range(max_intentos):
         try:
-            return client.messages.create(
-                model="claude-haiku-4-5-20251001",
+            return client.chat.completions.create(
+                model="gpt-4o-mini",
                 max_tokens=500,
-                system=system_prompt,
-                messages=messages
+                messages=[{"role": "system", "content": system_prompt}] + messages
             )
-        except anthropic.RateLimitError:
-            if intento < max_intentos - 1:
-                espera = 2 ** intento  # 1s, 2s, 4s
+        except Exception as e:
+            if "rate_limit" in str(e).lower() and intento < max_intentos - 1:
+                espera = 2 ** intento
                 time.sleep(espera)
             else:
                 raise
@@ -217,7 +216,7 @@ if prompt:
 
     with st.chat_message("assistant"):
         with st.spinner("Consultando..."):
-            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             contexto_relevante = generar_contexto_relevante(prompt, generar_contexto_completo())
 
             system_prompt = f"""Eres Lumi, asistente virtual oficial de instituciones
@@ -318,7 +317,7 @@ No solicites datos sensibles innecesarios en el chat.
                 system_prompt,
                 [{"role": m["role"], "content": m["content"]} for m in historial]
             )
-            respuesta = response.content[0].text
+            respuesta = response.choices[0].message.content
             st.markdown(respuesta)
             st.session_state.messages.append({
                 "role": "assistant",
